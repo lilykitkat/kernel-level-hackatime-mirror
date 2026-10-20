@@ -46,7 +46,7 @@ static unsigned int hk_check_tcp(struct sk_buff *skb, unsigned int thoff){
     }
     if(skb_find_text(skb, payoff, skb->len, host_ts)==UINT_MAX) return NF_ACCEPT
         ;// that's not hackatime
-    pr_info_ratelimited("hidkbd_activity: blocked hackatime\n");
+    pr_info_ratelimited("kernel_level_hackatime: blocked hackatime\n");
     return NF_DROP;
 }
 static unsigned int hk_out_hook4(void *priv, struct sk_buff *skb, const struct
@@ -98,7 +98,7 @@ static int hid_connect(struct input_handler *handler, struct input_dev *dev,
 	if (error)  goto err_free;
 	error = input_open_device(handle);
 	if(error)   goto err_unregister;
-	pr_info("hidkbd_activity: watching \"%s\"\n", dev->name);
+	pr_info("kernel_level_hackatime: watching \"%s\"\n", dev->name);
 	return 0;
 err_unregister:
 	input_unregister_handle(handle);
@@ -107,7 +107,7 @@ err_free:
 	return error;
 }
 static void hid_disconnect(struct input_handle *handle){
-    pr_info("hidkbd_activity: stopped watching \"%s\"\n", handle->dev->name);
+    pr_info("kernel_level_hackatime: stopped watching \"%s\"\n", handle->dev->name);
     input_close_device(handle);
     input_unregister_handle(handle);
     kfree(handle);
@@ -124,7 +124,7 @@ static struct input_handler hid_handler = {
 	.event      = hid_event,
 	.connect    = hid_connect,
 	.disconnect = hid_disconnect,
-	.name       = "hidkbd_activity",
+	.name       = "kernel_level_hackatime",
 	.id_table   = hid_ids,
 };
 static int hid_proc_show(struct seq_file *m, void *v){
@@ -145,7 +145,7 @@ static int __init hid_init(void){
         int error;
         error=input_register_handler(&hid_handler);
         if (error) return error;
-        hid_proc_entry = proc_create("hidkbd_activity", 0444, NULL,
+        hid_proc_entry = proc_create("kernel_level_hackatime", 0444, NULL,
             &hid_proc_fops);
         if (!hid_proc_entry){
                 error = -ENOMEM;
@@ -159,7 +159,7 @@ static int __init hid_init(void){
         }
         error = nf_register_net_hooks(&init_net, hk_ops, ARRAY_SIZE(hk_ops));
         if (error) goto err_ts;
-        pr_info("hidkbd_activity: loaded (timeout=%ds)\n", ACTIVITY_TIMEOUT_SECS);
+        pr_info("kernel_level_hackatime: loaded (timeout=%ds)\n", ACTIVITY_TIMEOUT_SECS);
         return 0;
 err_ts:
         textsearch_destroy(host_ts);
@@ -174,7 +174,7 @@ static void __exit hid_exit(void){
         textsearch_destroy(host_ts);
         proc_remove(hid_proc_entry);
         input_unregister_handler(&hid_handler);
-        pr_info("hidkbd_activity: unloaded\n");
+        pr_info("kernel_level_hackatime: unloaded\n");
 }
 
 module_init(hid_init);
