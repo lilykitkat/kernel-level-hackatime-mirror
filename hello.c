@@ -13,7 +13,9 @@
 #include <linux/ipv6.h>
 #include <linux/netfilter_ipv6.h>
 #include <net/ipv6.h>
-#define ACTIVITY_TIMEOUT_SECS 30
+#include <linux/btf.h>
+#include <linux/btf_ids.h>
+#define ACTIVITY_TIMEOUT_SECS 10
 #define ACTIVITY_TIMEOUT_JIFF (ACTIVITY_TIMEOUT_SECS * HZ)
 static unsigned long last_event;
 static bool event;
@@ -30,6 +32,19 @@ bool hid_active(void){
     return time_before(jiffies, last+ACTIVITY_TIMEOUT_JIFF);
 }
 EXPORT_SYMBOL(hid_active);
+__bpf_kfunc_start_defs(); // register as a kfunc
+__bpf_kfunc bool bpf_hid_active(void){
+    return hid_active();
+}
+__bpf_kfunc_end_defs();
+BTF_KFUNCS_START(hid_kfunc_ids)
+BTF_ID_FLAGS(func, bpf_hid_active)
+BTF_KFUNCS_END(hid_kfunc_ids)
+
+static const struct btf_kfunc_id_set hid_kfunc_set = {
+    .owner = THIS_MODULE,
+    .set   = &hid_kfunc_ids,
+};
 static unsigned int hk_check_tcp(struct sk_buff *skb, unsigned int thoff){
     struct tcphdr _th, *th;
     unsigned int payoff;
@@ -107,7 +122,8 @@ err_free:
 	return error;
 }
 static void hid_disconnect(struct input_handle *handle){
-    pr_info("kernel_level_hackatime: stopped watching \"%s\"\n", handle->dev->name);
+    pr_info("kernel_level_hackatime: stopped watching \"%s\"\n",
+            handle->dev->name);
     input_close_device(handle);
     input_unregister_handle(handle);
     kfree(handle);
@@ -143,6 +159,8 @@ static const struct proc_ops hid_proc_fops = {
 static struct proc_dir_entry *hid_proc_entry;
 static int __init hid_init(void){
         int error;
+        error = register_btf_kfunc_id_set(BPF_PROG_TYPE_LSM, &hid_kfunc_set);
+        if (error) return error;
         error=input_register_handler(&hid_handler);
         if (error) return error;
         hid_proc_entry = proc_create("kernel_level_hackatime", 0444, NULL,
